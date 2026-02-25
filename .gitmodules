@@ -1,0 +1,6 @@
+[submodule "front"]
+	path = front
+	url = https://github.com/wellsla/pipeup-2026-1-front.git
+[submodule "api"]
+	path = api
+	url = https://github.com/wellsla/pipeup-2026-1-api.git
