@@ -1,0 +1,96 @@
+services:
+  # PHP-FPM Application Server
+  app:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: pipeup-app
+    restart: unless-stopped
+    working_dir: /var/www/api
+    volumes:
+      - ./api:/var/www/api
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - pipeup-network
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-pipeup}
+      - DB_USERNAME=${DB_USERNAME:-pipeup}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+
+  # Nginx Web Server
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: pipeup-nginx
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8080}:80"
+    volumes:
+      - ./api:/var/www/api
+      - ./docker/api/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - pipeup-network
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: pipeup-mysql
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+      MYSQL_DATABASE: ${DB_DATABASE:-pipeup}
+      MYSQL_USER: ${DB_USERNAME:-pipeup}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - pipeup-mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p${DB_ROOT_PASSWORD:-rootsecret}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pipeup-network
+
+  # Frontend Dev Server
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/front/Dockerfile
+    container_name: pipeup-frontend
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./front:/app
+      - pipeup-front-node-modules:/app/node_modules
+    command: yarn dev --host 0.0.0.0
+    networks:
+      - pipeup-network
+
+volumes:
+  pipeup-mysql-data:
+    driver: local
+  pipeup-front-node-modules:
+    driver: local
+
+networks:
+  pipeup-network:
+    driver: bridge
